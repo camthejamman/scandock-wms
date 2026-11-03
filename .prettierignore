@@ -10,3 +10,4 @@ e2e/.auth
 docs/img
 e2e/tests/visual/__snapshots__
 .claude
+postman/*.json

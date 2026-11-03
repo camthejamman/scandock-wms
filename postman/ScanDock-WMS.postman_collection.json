@@ -1,0 +1,2931 @@
+{
+  "info": {
+    "name": "ScanDock WMS API",
+    "_postman_id": "a9c7f3e2-5d1b-4c8e-9f0a-scandock0001",
+    "description": "Regression collection for the ScanDock warehouse API. Run it top to bottom (Collection Runner or Newman): \"00 Setup\" signs in and stores tokens, later folders chain ids through collection variables. Generated from scripts/build-postman.ts; edit that file, not this one.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Make single requests runnable out of order: give them a run id if the setup folder has not.",
+          "if (!pm.collectionVariables.get('runId')) pm.collectionVariables.set('runId', Date.now().toString(36).toUpperCase().slice(-6));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('answers within 1500 ms', () => pm.expect(pm.response.responseTime).to.be.below(1500));",
+          "if (pm.response.code !== 204) pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "operatorToken",
+      "value": ""
+    },
+    {
+      "key": "operatorName",
+      "value": ""
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "sku",
+      "value": ""
+    },
+    {
+      "key": "barcode",
+      "value": ""
+    },
+    {
+      "key": "lotSku",
+      "value": ""
+    },
+    {
+      "key": "bin",
+      "value": ""
+    },
+    {
+      "key": "pickBin",
+      "value": ""
+    },
+    {
+      "key": "poNumber",
+      "value": ""
+    },
+    {
+      "key": "receiptId",
+      "value": ""
+    },
+    {
+      "key": "lotPo",
+      "value": ""
+    },
+    {
+      "key": "soNumber",
+      "value": ""
+    },
+    {
+      "key": "trackingNumber",
+      "value": ""
+    },
+    {
+      "key": "transferRef",
+      "value": ""
+    },
+    {
+      "key": "countId",
+      "value": ""
+    },
+    {
+      "key": "erpSo",
+      "value": ""
+    },
+    {
+      "key": "newUserId",
+      "value": ""
+    },
+    {
+      "key": "newUser",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "description": "Health check, demo-data reset and the two sessions every later request relies on.",
+      "item": [
+        {
+          "name": "Health",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A fresh run id keeps every SKU / bin / order number unique, so the collection can be run again and again.",
+                  "pm.collectionVariables.set('runId', Date.now().toString(36).toUpperCase().slice(-6) + Math.random().toString(36).slice(2, 5).toUpperCase());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('api is ok', () => pm.expect(body.status).to.eql('ok'));",
+                  "pm.test('database is ok', () => pm.expect(body.db).to.eql('ok'));",
+                  "pm.test('test hooks are enabled (needed for the reset below)', () => pm.expect(body.testHooks).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Reset demo data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('reset ok', () => pm.expect(body.ok).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/test/reset",
+            "description": "Only exists when the API runs with TEST_HOOKS=true. Rebuilds the seed so expected numbers are stable.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login as admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('token looks like a JWT', () => pm.expect(body.token).to.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/));",
+                  "pm.test('role is admin', () => pm.expect(body.user.role).to.eql('admin'));",
+                  "pm.collectionVariables.set('token', String(body.token));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUser}}\",\n  \"pin\": \"{{adminPin}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login as operator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('role is operator', () => pm.expect(body.user.role).to.eql('operator'));",
+                  "pm.collectionVariables.set('operatorToken', String(body.token));",
+                  "pm.collectionVariables.set('operatorName', String(body.user.displayName));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{operatorUser}}\",\n  \"pin\": \"{{operatorPin}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Who am I",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('admin session', () => pm.expect(body.user.username).to.eql(pm.variables.get('adminUser')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/me",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Auth and access",
+      "description": "Negative authentication and role checks (REQ-001..003).",
+      "item": [
+        {
+          "name": "Wrong PIN is 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code INVALID_CREDENTIALS', () => pm.expect(body.error.code).to.eql('INVALID_CREDENTIALS'));",
+                  "pm.test('no token leaked', () => pm.expect(body.token).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUser}}\",\n  \"pin\": \"0000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Deactivated user is 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code USER_INACTIVE', () => pm.expect(body.error.code).to.eql('USER_INACTIVE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"inactive\",\n  \"pin\": \"1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "No token is 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code UNAUTHENTICATED', () => pm.expect(body.error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Operator cannot list users (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => pm.expect(body.error.code).to.eql('FORBIDDEN'));",
+                  "pm.test('message names the allowed roles', () => pm.expect(body.error.message).to.include('admin'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Operator cannot change settings (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/settings",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blindCounts\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown route is a 404 envelope",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code NOT_FOUND', () => pm.expect(body.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/nothing-here",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Master data",
+      "description": "Items and bins used by the rest of the run (REQ-004..006).",
+      "item": [
+        {
+          "name": "Create item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('sku is upper-cased', () => pm.expect(body.sku).to.eql('PM-' + pm.variables.get('runId')));",
+                  "pm.test('barcode is a 12-digit UPC-A', () => pm.expect(body.barcode).to.match(/^\\d{12}$/));",
+                  "pm.collectionVariables.set('sku', String(body.sku));",
+                  "pm.collectionVariables.set('barcode', String(body.barcode));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"pm-{{runId}}\",\n  \"name\": \"Postman test item {{runId}}\",\n  \"category\": \"Postman\",\n  \"weightLb\": 2,\n  \"reorderPoint\": 1,\n  \"unitCost\": 3.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duplicate SKU is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code DUPLICATE_SKU', () => pm.expect(body.error.code).to.eql('DUPLICATE_SKU'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{sku}}\",\n  \"name\": \"dupe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Validation lists every bad field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code VALIDATION_ERROR', () => pm.expect(body.error.code).to.eql('VALIDATION_ERROR'));",
+                  "const paths = body.error.details.map(d => d.path);",
+                  "pm.test('details name sku, name and weightLb', () => pm.expect(paths).to.include.members(['sku', 'name', 'weightLb']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"x\",\n  \"name\": \"\",\n  \"weightLb\": -1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get item by barcode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('same item', () => pm.expect(body.sku).to.eql(pm.variables.get('sku')));",
+                  "pm.test('nothing on hand yet', () => pm.expect(body.qtyOnHand).to.eql(0));",
+                  "pm.test('flagged low stock (0 <= reorder point 1)', () => pm.expect(body.lowStock).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items/{{barcode}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Create lot-tracked item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('lot tracked', () => pm.expect(body.lotTracked).to.eql(true));",
+                  "pm.collectionVariables.set('lotSku', String(body.sku));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/items",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"pml-{{runId}}\",\n  \"name\": \"Postman lot item {{runId}}\",\n  \"lotTracked\": true,\n  \"weightLb\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create storage bin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('code upper-cased', () => pm.expect(body.code).to.eql('PB-' + pm.variables.get('runId') + '-S'));",
+                  "pm.test('zone', () => pm.expect(body.zone).to.eql('STORAGE'));",
+                  "pm.collectionVariables.set('bin', String(body.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bins",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"pb-{{runId}}-s\",\n  \"zone\": \"STORAGE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create picking bin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('pickBin', String(body.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bins",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"pb-{{runId}}-p\",\n  \"zone\": \"PICKING\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Invalid zone is 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code VALIDATION_ERROR', () => pm.expect(body.error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bins",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"pb-{{runId}}-x\",\n  \"zone\": \"ATTIC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List picking bins",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('every row is PICKING', () => body.data.forEach(b => pm.expect(b.zone).to.eql('PICKING')));",
+                  "pm.test('our new bin is listed', () => pm.expect(body.data.map(b => b.code)).to.include(pm.collectionVariables.get('pickBin')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/bins?zone=PICKING",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Receiving",
+      "description": "PO lifecycle: OPEN -> PARTIAL -> RECEIVED, with the over-receipt and lot rules (REQ-009..013).",
+      "item": [
+        {
+          "name": "Create purchase order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status OPEN', () => pm.expect(body.status).to.eql('OPEN'));",
+                  "pm.test('one line of 10', () => pm.expect(body.lines[0].qtyRemaining).to.eql(10));",
+                  "pm.collectionVariables.set('poNumber', String(body.poNumber));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendor\": \"Postman Vendor\",\n  \"lines\": [\n    {\n      \"sku\": \"{{sku}}\",\n      \"qty\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Over-receipt is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code OVER_RECEIPT', () => pm.expect(body.error.code).to.eql('OVER_RECEIPT'));",
+                  "pm.test('details say 10 remain', () => pm.expect(body.error.details.qtyRemaining).to.eql(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 11,\n      \"bin\": \"{{bin}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Receiving into a SHIPPING bin is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code INVALID_BIN_ZONE', () => pm.expect(body.error.code).to.eql('INVALID_BIN_ZONE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 1,\n      \"bin\": \"SHIP-01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Receive 4 into storage (partial)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('PO is PARTIAL', () => pm.expect(body.poStatus).to.eql('PARTIAL'));",
+                  "pm.test('6 remaining', () => pm.expect(body.lines[0].qtyRemaining).to.eql(6));",
+                  "pm.test('ERP document queued', () => pm.expect(body.erpQueued).to.eql(true));",
+                  "pm.collectionVariables.set('receiptId', String(body.receiptId));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"sku\": \"{{barcode}}\",\n      \"qty\": 4,\n      \"bin\": \"{{bin}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Receive 6 into picking (complete)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('PO is RECEIVED', () => pm.expect(body.poStatus).to.eql('RECEIVED'));",
+                  "pm.test('nothing remaining', () => pm.expect(body.lines[0].qtyRemaining).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 6,\n      \"bin\": \"{{pickBin}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PO detail shows both receipts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('status RECEIVED', () => pm.expect(body.status).to.eql('RECEIVED'));",
+                  "pm.test('two receipts', () => pm.expect(body.receipts.length).to.eql(2));",
+                  "pm.test('receipts carry the receiver', () => pm.expect(body.receipts[0].receivedBy).to.eql('Ada Admin'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "A received PO refuses more",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code PO_NOT_OPEN', () => pm.expect(body.error.code).to.eql('PO_NOT_OPEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{poNumber}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 1,\n      \"bin\": \"{{bin}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create PO for the lot-tracked item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('lotPo', String(body.poNumber));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendor\": \"Postman Lots\",\n  \"lines\": [\n    {\n      \"sku\": \"{{lotSku}}\",\n      \"qty\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Lot-tracked receipt without a lot is 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code LOT_REQUIRED', () => pm.expect(body.error.code).to.eql('LOT_REQUIRED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{lotPo}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 5,\n      \"bin\": \"{{bin}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Lot-tracked receipt with a lot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('lot kept on the receipt', () => pm.expect(body.lines[0].lot).to.eql('LOT-' + pm.variables.get('runId')));",
+                  "pm.test('PO RECEIVED', () => pm.expect(body.poStatus).to.eql('RECEIVED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/purchase-orders/{{lotPo}}/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"lineNo\": 1,\n      \"qty\": 5,\n      \"bin\": \"{{bin}}\",\n      \"lot\": \"LOT-{{runId}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Inventory by bin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const mine = body.rows.find(r => r.sku === pm.collectionVariables.get('sku'));",
+                  "pm.test('4 of our item in storage', () => pm.expect(mine.qtyOnHand).to.eql(4));",
+                  "const lot = body.rows.find(r => r.sku === pm.collectionVariables.get('lotSku'));",
+                  "pm.test('lot row present', () => pm.expect(lot.lot).to.eql('LOT-' + pm.variables.get('runId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/bin/{{bin}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Inventory by item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('10 on hand in total', () => pm.expect(body.qtyOnHand).to.eql(10));",
+                  "pm.test('picking bin listed first', () => pm.expect(body.rows[0].bin).to.eql(pm.collectionVariables.get('pickBin')));",
+                  "pm.test('no longer low stock', () => pm.expect(body.lowStock).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/item/{{sku}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Picking and shipping",
+      "description": "SO lifecycle: OPEN -> PICKING -> PICKED -> SHIPPED (REQ-014..018).",
+      "item": [
+        {
+          "name": "Create sales order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status OPEN', () => pm.expect(body.status).to.eql('OPEN'));",
+                  "pm.collectionVariables.set('soNumber', String(body.soNumber));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"Postman Customer\",\n  \"country\": \"US\",\n  \"lines\": [\n    {\n      \"sku\": \"{{sku}}\",\n      \"qty\": 3\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "SO detail suggests the picking bin first",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('first suggestion is the PICKING bin', () => pm.expect(body.lines[0].suggestions[0].bin).to.eql(pm.collectionVariables.get('pickBin')));",
+                  "pm.test('10 available', () => pm.expect(body.lines[0].available).to.eql(10));",
+                  "pm.test('estimated weight 3 x 2 lb', () => pm.expect(body.estimatedWeightLb).to.eql(6));",
+                  "pm.test('UPS Ground suggested', () => pm.expect(body.shippingSuggestion.service).to.eql('Ground'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Wrong item scan is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code WRONG_ITEM', () => pm.expect(body.error.code).to.eql('WRONG_ITEM'));",
+                  "pm.test('details name the expected sku', () => pm.expect(body.error.details.expected).to.eql(pm.variables.get('sku')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/picks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lineNo\": 1,\n  \"bin\": \"{{pickBin}}\",\n  \"qty\": 1,\n  \"sku\": \"TOY-ROBOT-RED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Over-pick is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code OVER_PICK', () => pm.expect(body.error.code).to.eql('OVER_PICK'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/picks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lineNo\": 1,\n  \"bin\": \"{{pickBin}}\",\n  \"qty\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Pick 3 from the picking bin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('order is PICKING', () => pm.expect(body.status).to.eql('PICKING'));",
+                  "pm.test('bin now holds 3', () => pm.expect(body.binQtyAfter).to.eql(3));",
+                  "pm.test('all lines picked', () => pm.expect(body.allLinesPicked).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/picks",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lineNo\": 1,\n  \"bin\": \"{{pickBin}}\",\n  \"qty\": 3,\n  \"sku\": \"{{barcode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Complete the pick",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('PICKED', () => pm.expect(body.status).to.eql('PICKED'));",
+                  "pm.test('not short', () => pm.expect(body.short).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/complete-pick",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Shipping suggestion for 6 lb",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('UPS', () => pm.expect(body.carrier).to.eql('UPS'));",
+                  "pm.test('Ground', () => pm.expect(body.service).to.eql('Ground'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/shipping/suggest?weightLb=6&country=US&priority=STANDARD",
+            "description": ""
+          }
+        },
+        {
+          "name": "Shipping suggestion for 200 lb to Canada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('international wins over freight', () => pm.expect(body.carrier).to.eql('DHL'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/shipping/suggest?weightLb=200&country=CA",
+            "description": ""
+          }
+        },
+        {
+          "name": "Ship the order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('SHIPPED', () => pm.expect(body.status).to.eql('SHIPPED'));",
+                  "pm.test('UPS by rule', () => pm.expect(body.carrier).to.eql('UPS'));",
+                  "pm.test('weight from the picked lines', () => pm.expect(body.weightLb).to.eql(6));",
+                  "pm.test('UPS-shaped tracking number', () => pm.expect(body.trackingNumber).to.match(/^1Z[A-Z0-9]{16}$/));",
+                  "pm.collectionVariables.set('trackingNumber', String(body.trackingNumber));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/ship",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Shipping twice is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code SO_NOT_PICKED', () => pm.expect(body.error.code).to.eql('SO_NOT_PICKED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/ship",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Shipped orders cannot be cancelled",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code SO_NOT_CANCELLABLE', () => pm.expect(body.error.code).to.eql('SO_NOT_CANCELLABLE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{soNumber}}/cancel",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Transfers",
+      "description": "Bin-to-bin moves and their ledger rows (REQ-019, REQ-023).",
+      "item": [
+        {
+          "name": "Move 2 from storage to picking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('storage now 2', () => pm.expect(body.from.qtyAfter).to.eql(2));",
+                  "pm.test('picking now 5', () => pm.expect(body.to.qtyAfter).to.eql(5));",
+                  "pm.test('reference looks like TRF-n', () => pm.expect(body.reference).to.match(/^TRF-\\d+$/));",
+                  "pm.collectionVariables.set('transferRef', String(body.reference));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{sku}}\",\n  \"fromBin\": \"{{bin}}\",\n  \"toBin\": \"{{pickBin}}\",\n  \"qty\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Same bin is 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code SAME_BIN', () => pm.expect(body.error.code).to.eql('SAME_BIN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{sku}}\",\n  \"fromBin\": \"{{bin}}\",\n  \"toBin\": \"{{bin}}\",\n  \"qty\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "More than the bin holds is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code INSUFFICIENT_STOCK', () => pm.expect(body.error.code).to.eql('INSUFFICIENT_STOCK'));",
+                  "pm.test('details say 2 available', () => pm.expect(body.error.details.available).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{sku}}\",\n  \"fromBin\": \"{{bin}}\",\n  \"toBin\": \"{{pickBin}}\",\n  \"qty\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Ledger has an OUT and an IN row for the transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('two rows', () => pm.expect(body.data.length).to.eql(2));",
+                  "pm.test('one TRANSFER_OUT and one TRANSFER_IN', () => pm.expect(body.data.map(t => t.type).sort()).to.eql(['TRANSFER_IN', 'TRANSFER_OUT']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transactions?reference={{transferRef}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Cycle counts",
+      "description": "Snapshot, blind-free count by the operator, approval by the admin (REQ-020..021).",
+      "item": [
+        {
+          "name": "Create count for the storage bin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('OPEN', () => pm.expect(body.status).to.eql('OPEN'));",
+                  "pm.test('assigned to the operator', () => pm.expect(body.assignedTo).to.eql(pm.collectionVariables.get('operatorName')));",
+                  "const mine = body.lines.find(l => l.sku === pm.collectionVariables.get('sku'));",
+                  "pm.test('expected 2 of our item', () => pm.expect(mine.expectedQty).to.eql(2));",
+                  "pm.collectionVariables.set('countId', String(body.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cycle-counts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bin\": \"{{bin}}\",\n  \"assignedTo\": \"{{operatorUser}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Second count for the same bin is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code COUNT_ALREADY_OPEN', () => pm.expect(body.error.code).to.eql('COUNT_ALREADY_OPEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cycle-counts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bin\": \"{{bin}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Operator submits the count (finds 1, not 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('SUBMITTED', () => pm.expect(body.status).to.eql('SUBMITTED'));",
+                  "const mine = body.lines.find(l => l.sku === pm.collectionVariables.get('sku'));",
+                  "pm.test('variance -1', () => pm.expect(mine.variance).to.eql(-1));",
+                  "pm.test('one line with variance', () => pm.expect(body.summary.linesWithVariance).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cycle-counts/{{countId}}/submit",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    {\n      \"sku\": \"{{sku}}\",\n      \"countedQty\": 1\n    },\n    {\n      \"sku\": \"{{lotSku}}\",\n      \"lot\": \"LOT-{{runId}}\",\n      \"countedQty\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Operator cannot approve (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cycle-counts/{{countId}}/approve",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin approves: adjustment posted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('APPROVED', () => pm.expect(body.status).to.eql('APPROVED'));",
+                  "pm.test('one adjustment', () => pm.expect(body.adjustments.length).to.eql(1));",
+                  "pm.test('adjustment of -1', () => pm.expect(body.adjustments[0].qtyDelta).to.eql(-1));",
+                  "pm.test('ERP document queued', () => pm.expect(body.erpQueued).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cycle-counts/{{countId}}/approve",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Approved from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Storage bin now holds 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const mine = body.rows.find(r => r.sku === pm.collectionVariables.get('sku'));",
+                  "pm.test('qty 1', () => pm.expect(mine.qtyOnHand).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/bin/{{bin}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Ledger has the ADJUSTMENT row",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('one row', () => pm.expect(body.data.length).to.eql(1));",
+                  "pm.test('type ADJUSTMENT', () => pm.expect(body.data[0].type).to.eql('ADJUSTMENT'));",
+                  "pm.test('delta -1', () => pm.expect(body.data[0].qtyDelta).to.eql(-1));",
+                  "pm.test('posted by the admin', () => pm.expect(body.data[0].user).to.eql('Ada Admin'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transactions?reference=CC-{{countId}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 ERP sync",
+      "description": "Outbox delivery and idempotent pulls against the Nimbus ERP mock (REQ-024..025).",
+      "item": [
+        {
+          "name": "ERP status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('reachable', () => pm.expect(body.reachable).to.eql(true));",
+                  "pm.test('outbox counters present', () => pm.expect(body.outbox).to.have.all.keys('pending', 'failed', 'sent'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/erp/status",
+            "description": ""
+          }
+        },
+        {
+          "name": "Sync now",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('nothing failed to push', () => pm.expect(body.pushed.failed).to.eql(0));",
+                  "pm.test('pull result has counts', () => pm.expect(body.pulled).to.include.keys('purchaseOrders', 'salesOrders', 'skipped'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/erp/sync",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Our documents are SENT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const po = pm.collectionVariables.get('poNumber'); const so = pm.collectionVariables.get('soNumber'); const cc = 'CC-' + pm.collectionVariables.get('countId');",
+                  "const mine = body.data.filter(o => o.reference.startsWith(po) || o.reference === so || o.reference === cc);",
+                  "pm.test('receipts, fulfillment and adjustment were queued', () => pm.expect(mine.length).to.be.at.least(4));",
+                  "pm.test('all of them are SENT with an ERP reference', () => mine.forEach(o => { pm.expect(o.status).to.eql('SENT'); pm.expect(o.erpRef).to.be.a('string'); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/erp/outbox",
+            "description": ""
+          }
+        },
+        {
+          "name": "ERP received the fulfillment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const mine = body.find(f => f.payload.soNumber === pm.collectionVariables.get('soNumber'));",
+                  "pm.test('fulfillment is there with our tracking number', () => pm.expect(mine.payload.trackingNumber).to.eql(pm.collectionVariables.get('trackingNumber')));",
+                  "pm.test('quantity matches the pick', () => pm.expect(mine.payload.lines).to.eql([{ sku: pm.collectionVariables.get('sku'), qty: 3 }]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{erpUrl}}/erp/item-fulfillments",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Create an order in the ERP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('erpSo', String(body.soNumber));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{erpUrl}}/erp/sales-orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"soNumber\": \"ESO-{{runId}}\",\n  \"customer\": \"ERP Customer\",\n  \"shipToCountry\": \"CA\",\n  \"priority\": \"RUSH\",\n  \"lines\": [\n    {\n      \"sku\": \"{{sku}}\",\n      \"qty\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Sync pulls it once",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/erp/sync",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "The ERP order is now a warehouse order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('linked to the ERP id', () => pm.expect(body.erpId).to.match(/^NIMBUS-SO-/));",
+                  "pm.test('country and priority copied', () => pm.expect(body.country + body.priority).to.eql('CARUSH'));",
+                  "pm.test('DHL suggested for Canada', () => pm.expect(body.shippingSuggestion.carrier).to.eql('DHL'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders/{{erpSo}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Second sync does not duplicate it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/erp/sync",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Still exactly one order with that number",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('total 1', () => pm.expect(body.total).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales-orders?q={{erpSo}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Reports, labels, settings",
+      "description": "Read models and cross-checks (REQ-023, REQ-026..028).",
+      "item": [
+        {
+          "name": "Dashboard KPIs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "['openPurchaseOrders','ordersToPick','ordersToShip','unitsOnHand','lowStockItems'].forEach(k => pm.test(k + ' is a number', () => pm.expect(body[k]).to.be.a('number')));",
+                  "pm.test('ERP reachable', () => pm.expect(body.erpReachable).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reports/dashboard",
+            "description": ""
+          }
+        },
+        {
+          "name": "Ledger invariant holds",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('ok', () => pm.expect(body.ok).to.eql(true));",
+                  "pm.test('no mismatches', () => pm.expect(body.mismatches.length).to.eql(0));",
+                  "pm.test('no negative stock', () => pm.expect(body.negatives.length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/invariants",
+            "description": ""
+          }
+        },
+        {
+          "name": "Transactions for our item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('receipt x2, pick, transfer out/in, adjustment = 6 rows', () => pm.expect(body.data.length).to.eql(6));",
+                  "pm.test('newest first', () => pm.expect(body.data[0].id).to.be.above(body.data[5].id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transactions?sku={{sku}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Bin label (ZPL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('ZPL starts with ^XA and holds the bin code', () => { pm.expect(body.zpl).to.match(/^\\^XA/); pm.expect(body.zpl).to.include('^FD' + pm.collectionVariables.get('bin') + '^FS'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/labels/bin/{{bin}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "Item label (UPC-A)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the UPC-A command with 11 data digits', () => pm.expect(body.zpl).to.include('^BUN'));",
+                  "pm.test('lot printed', () => pm.expect(body.zpl).to.include('Lot: L1'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/labels/item/{{sku}}?lot=L1",
+            "description": ""
+          }
+        },
+        {
+          "name": "Settings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('exactly the four warehouse settings', () => pm.expect(Object.keys(body).sort()).to.eql(['allowNegativeInventory', 'allowOverReceipt', 'allowShortPick', 'blindCounts']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/settings",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Users",
+      "description": "User administration and its effect on sessions (REQ-002, REQ-033).",
+      "item": [
+        {
+          "name": "Create user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('username lower-cased', () => pm.expect(body.username).to.eql(('pm' + pm.collectionVariables.get('runId')).toLowerCase()));",
+                  "pm.collectionVariables.set('newUserId', String(body.id));",
+                  "pm.collectionVariables.set('newUser', String(body.username));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"pm{{runId}}\",\n  \"displayName\": \"Postman Person\",\n  \"role\": \"operator\",\n  \"pin\": \"2468\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "New user can sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{newUser}}\",\n  \"pin\": \"2468\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Deactivate the user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('inactive', () => pm.expect(body.active).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{newUserId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Deactivated user cannot sign in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code USER_INACTIVE', () => pm.expect(body.error.code).to.eql('USER_INACTIVE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{newUser}}\",\n  \"pin\": \"2468\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Admin cannot deactivate themselves",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test('error code CANNOT_DEACTIVATE_SELF', () => pm.expect(body.error.code).to.eql('CANNOT_DEACTIVATE_SELF'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/1",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

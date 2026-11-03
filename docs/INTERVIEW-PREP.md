@@ -114,6 +114,17 @@ cannot test everything (risk-based: money paths and integrations first).
   added cross-browser, auto-wait and a runner. If RF-SMART has legacy Puppeteer suites, the migration path is mechanical:
   `page.waitForSelector` + click → `locator.click()`, `page.$eval` → `locator.evaluate`, etc.
 
+## 6b. Postman and Newman
+
+* **Collection** = folders of requests with pre-request and test scripts (`pm.test`, `pm.expect`, Chai); **environment**
+  = per-target variables (`baseUrl`, credentials); **collection variables** carry state between requests (tokens, ids).
+* Variables expand in URLs/headers/bodies but **not** inside scripts (use `pm.variables.get()`), a classic gotcha.
+* **Newman** runs a collection headlessly with CLI/JUnit/HTML reporters, so the same collection a support engineer uses
+  to reproduce a bug is a CI job. ScanDock's `npm run test:postman` does exactly that and the collection is generated
+  from TypeScript, so it lives in code review like everything else.
+* When asked "Postman or Playwright for API tests?": both, for different audiences (see `postman/README.md`); the
+  regression gate is the parallel, data-isolated Playwright suite, Postman is the shared, explorable contract.
+
 ## 7. Jira + X-ray
 
 Entities: **Test** (manual steps or automated, keyed), **Precondition**, **Test Set** (grouping), **Test Plan** (what a

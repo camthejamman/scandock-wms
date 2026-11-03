@@ -108,6 +108,26 @@ jobs:
       #     XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
       #     XRAY_PROJECT_KEY: SD
 
+  postman:
+    name: Postman collection (Newman)
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: docker compose up -d --build --wait db erp-mock api
+      - run: npm run test:postman
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postman-junit
+          path: e2e/junit/postman.xml
+          retention-days: 14
+
   perf:
     name: k6 smoke (manual)
     runs-on: ubuntu-latest

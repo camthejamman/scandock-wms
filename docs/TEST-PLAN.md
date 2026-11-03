@@ -41,6 +41,7 @@ localisation, penetration testing (a basic auth/RBAC check is in scope).
 | Visual | Playwright screenshots (Docker image only) | 3 | Login, handheld menu/transfer, console settings/dashboard (dynamic regions masked) | CI / docker |
 | Cross-browser smoke | Playwright Firefox + WebKit | 2 × 2 | The critical path renders and works outside Chromium | ~10 s |
 | Serial / global-state | Playwright, one worker, last | 7 | Settings that change behaviour for everyone; ERP outage, retry, latency | ~20 s |
+| Postman collection | Newman | 74 requests, ~350 assertions | Shared, human-runnable regression of the API; same JUnit output for X-ray | ~3 s, every push |
 | Performance smoke | k6 | 1 script | p95 < 300 ms on inquiry/pick-list/dashboard under 10 VUs | manual / nightly |
 
 Principles:
