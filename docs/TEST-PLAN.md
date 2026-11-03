@@ -55,7 +55,8 @@ Principles:
 * **Retrying assertions only** (`expect(locator).toHaveText…`), never `allTextContents()` snapshots after a navigation
   (that was a real flake we removed).
 * **Global state is isolated**: anything that flips a setting or breaks the ERP runs in the `serial` project after
-  everything else and restores the defaults.
+  everything else and restores the defaults. In CI that project gets its own job and stack, because Playwright does
+  not shard dependency projects (a lesson from the first run: two shards each ran the whole suite).
 * **The ledger invariant is a test**: `GET /api/inventory/invariants` proves on-hand equals the sum of transactions.
 
 ## 4. Test environments

@@ -17,6 +17,18 @@ export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5180';
 export const API_URL = process.env.API_URL ?? 'http://localhost:4000';
 export const ERP_URL = process.env.ERP_URL ?? 'http://localhost:4100';
 const CI = !!process.env.CI;
+const WEBKIT = CI || !!process.env.PW_WEBKIT;
+/** Every project except setup and serial: what the CI shards run and what serial waits for locally. */
+export const SHARDABLE_PROJECTS = [
+  'api',
+  'scanner-mobile',
+  'admin-desktop',
+  'journeys',
+  'a11y',
+  'visual',
+  'smoke-firefox',
+  ...(WEBKIT ? ['smoke-webkit'] : []),
+];
 
 export default defineConfig({
   testDir: './tests',
@@ -91,24 +103,19 @@ export default defineConfig({
       use: { ...devices['Desktop Firefox'] },
     },
     {
-      // Tests that change global state (settings, ERP outage). They run last and never in parallel with others.
+      // Tests that change global state (settings, ERP outage). On a shared stack they must run after
+      // everything else, which project dependencies guarantee. Playwright never shards dependency
+      // projects, so in CI (where each job has its own stack) the serial job sets PW_SERIAL_ALONE=1
+      // and depends on `setup` only, while the shards run the other projects explicitly.
       name: 'serial',
       testDir: './tests/serial',
-      dependencies: [
-        'api',
-        'scanner-mobile',
-        'admin-desktop',
-        'journeys',
-        'a11y',
-        'smoke-firefox',
-        ...(CI || process.env.PW_WEBKIT ? ['smoke-webkit'] : []),
-      ],
+      dependencies: process.env.PW_SERIAL_ALONE ? ['setup'] : SHARDABLE_PROJECTS,
       fullyParallel: false,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
     // WebKit needs system libraries (`npx playwright install-deps`) that a dev box may not have,
     // so it runs in CI / the Docker image by default. Locally: PW_WEBKIT=1 npm run test:e2e.
-    ...(CI || process.env.PW_WEBKIT
+    ...(WEBKIT
       ? [
           {
             name: 'smoke-webkit',
