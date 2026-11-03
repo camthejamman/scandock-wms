@@ -1,0 +1,29 @@
+{
+  "name": "@scandock/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ScanDock WMS end-to-end, API, accessibility and visual tests (Playwright)",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:api": "playwright test --project=api",
+    "test:scanner": "playwright test --project=scanner-mobile",
+    "test:admin": "playwright test --project=admin-desktop",
+    "test:a11y": "playwright test --project=a11y",
+    "test:visual": "playwright test --project=visual",
+    "test:visual:update": "playwright test --project=visual --update-snapshots",
+    "test:headed": "playwright test --headed --project=scanner-mobile",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen --device='Pixel 7' http://localhost:5180",
+    "install-browsers": "playwright install chromium firefox webkit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24.0.0",
+    "zod": "^4.6.7"
+  }
+}

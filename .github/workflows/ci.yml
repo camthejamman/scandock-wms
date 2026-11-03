@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
+      - name: Requirements traceability gate
+        run: npm run traceability -- --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: traceability
+          path: docs/TRACEABILITY.md
+
+  e2e:
+    name: Playwright (shard ${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    needs: unit
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack (db, erp-mock, api, web)
+        run: docker compose up -d --build --wait db erp-mock api web
+      - name: Run Playwright in the official image
+        run: >
+          E2E_UID=$(id -u) E2E_GID=$(id -g)
+          docker compose --profile test run --rm
+          -e PW_BLOB=1 -e PW_VISUAL=1
+          e2e npx playwright test --shard=${{ matrix.shard }}/3
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: e2e/blob-report
+          retention-days: 7
+      - name: Upload traces and screenshots of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.shard }}
+          path: e2e/test-results
+          retention-days: 7
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color api erp-mock web | tail -n 400
+
+  report:
+    name: Merge reports (HTML + JUnit for X-ray)
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: all-blob-reports
+          merge-multiple: true
+      - name: Merge into one HTML report and one JUnit file
+        run: npx playwright merge-reports --reporter html,junit ./all-blob-reports
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: results.xml
+          retention-days: 14
+      # Example of the X-ray hand-off (needs XRAY_CLIENT_ID / XRAY_CLIENT_SECRET secrets and a project key):
+      # - run: npx tsx scripts/xray-import.ts results.xml
+      #   env:
+      #     XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+      #     XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+      #     XRAY_PROJECT_KEY: SD
+
+  perf:
+    name: k6 smoke (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build --wait db erp-mock api
+      - run: docker compose --profile perf run --rm k6

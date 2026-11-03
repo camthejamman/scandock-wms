@@ -1,0 +1,95 @@
+name: scandock
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scandock
+      POSTGRES_PASSWORD: scandock
+      POSTGRES_DB: scandock
+    ports:
+      - '5433:5432'
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U scandock -d scandock']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  erp-mock:
+    build:
+      context: .
+      dockerfile: apps/erp-mock/Dockerfile
+    environment:
+      PORT: 4100
+    ports:
+      - '4100:4100'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://scandock:scandock@db:5432/scandock
+      ERP_URL: http://erp-mock:4100
+      JWT_SECRET: dev-only-change-me
+      TEST_HOOKS: 'true'
+      OUTBOX_INTERVAL_MS: 5000
+      LOG_LEVEL: info
+    ports:
+      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+      erp-mock:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - '5180:80'
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # docker compose --profile test run --rm e2e
+  e2e:
+    profiles: ['test']
+    build:
+      context: .
+      dockerfile: e2e/Dockerfile
+    # Run as the host user so reports and snapshots written through the bind mounts stay editable.
+    user: '${E2E_UID:-1000}:${E2E_GID:-1000}'
+    environment:
+      HOME: /tmp
+      BASE_URL: http://web
+      API_URL: http://api:4000
+      ERP_URL: http://erp-mock:4100
+      CI: '1'
+      PW_VISUAL: '1'
+    volumes:
+      # The e2e sources and every report land on the host (dependencies stay in the image's /repo/node_modules).
+      - ./e2e:/repo/e2e
+    depends_on:
+      web:
+        condition: service_healthy
+
+  # docker compose --profile perf run --rm k6
+  k6:
+    profiles: ['perf']
+    image: grafana/k6:latest
+    environment:
+      API_URL: http://api:4000
+    volumes:
+      - ./perf:/perf
+    command: ['run', '/perf/smoke.js']
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  dbdata:

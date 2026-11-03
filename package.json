@@ -1,0 +1,42 @@
+{
+  "name": "scandock-wms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ScanDock WMS - a toy mobile barcode warehouse system (receiving, picking, shipping, transfers, cycle counts) with an ERP sync layer, built to practice end-to-end QA automation with Playwright.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/api",
+    "apps/erp-mock",
+    "apps/web",
+    "e2e"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n db,erp,api,web -c blue,magenta,green,yellow \"docker compose up db\" \"npm run dev -w apps/erp-mock\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:unit": "npm run test -w apps/api && npm run test -w apps/web",
+    "test:e2e": "npm run test -w e2e",
+    "test:e2e:smoke": "npm run test:smoke -w e2e",
+    "test:e2e:docker": "docker compose --profile test run --rm --build e2e",
+    "traceability": "tsx scripts/traceability.ts",
+    "up": "docker compose up -d --build db erp-mock api web",
+    "down": "docker compose down -v --remove-orphans",
+    "logs": "docker compose logs -f api web erp-mock",
+    "reset": "curl -s -X POST http://localhost:4000/api/test/reset"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.23.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}

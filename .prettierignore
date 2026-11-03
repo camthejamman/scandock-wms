@@ -1,0 +1,12 @@
+node_modules
+dist
+playwright-report
+test-results
+blob-report
+*.md
+*.sql
+e2e/junit
+e2e/.auth
+docs/img
+e2e/tests/visual/__snapshots__
+.claude
